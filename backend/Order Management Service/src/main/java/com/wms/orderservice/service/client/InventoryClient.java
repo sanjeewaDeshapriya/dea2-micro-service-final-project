@@ -38,8 +38,8 @@ public class InventoryClient {
             }
 
             log.debug("Inventory availability result - canFulfill: {}, missingItems: {}",
-                    response.isCanFulfill(),
-                    response.getMissingItems() != null ? response.getMissingItems().size() : 0);
+                    response.canFulfill(),
+                    response.missingItems() != null ? response.missingItems().size() : 0);
 
             return response;
         } catch (RestClientException ex) {
