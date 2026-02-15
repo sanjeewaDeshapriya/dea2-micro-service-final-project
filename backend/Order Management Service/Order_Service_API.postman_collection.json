@@ -1,0 +1,508 @@
+{
+	"info": {
+		"name": "WMS Order Service API",
+		"description": "Order Management Service for Warehouse Management System (Sri Lanka)\n\nBase URL: http://localhost:8080/api/v1/orders\n\n## Testing Flow\n1. Create Order\n2. Get Order by ID (copy the id)\n3. List Orders\n4. Validate Order (requires Inventory Service)\n5. Approve Order (requires Inventory Service)\n6. Update Status (PICKING_REQUESTED → PACKED → DISPATCHED → DELIVERED)\n7. Cancel Order",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "orderId",
+			"value": "PASTE_ORDER_UUID_HERE",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Create Order",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"customerId\": \"CUST-LK-001\",\n  \"partialAllowed\": true,\n  \"items\": [\n    {\n      \"itemId\": \"ITEM-001\",\n      \"quantity\": 10,\n      \"unitPrice\": 250.00\n    },\n    {\n      \"itemId\": \"ITEM-002\",\n      \"quantity\": 5,\n      \"unitPrice\": 500.00\n    },\n    {\n      \"itemId\": \"ITEM-003\",\n      \"quantity\": 20,\n      \"unitPrice\": 100.00\n    }\n  ]\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders"]
+				},
+				"description": "Creates a new order with items. Status starts as CREATED.\n\nAfter success, copy the `id` from the response and set it as the `orderId` collection variable."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    var jsonData = pm.response.json();",
+							"    pm.collectionVariables.set('orderId', jsonData.id);",
+							"    console.log('Order ID saved: ' + jsonData.id);",
+							"    console.log('Order Number: ' + jsonData.orderNumber);",
+							"}",
+							"",
+							"pm.test('Order created successfully', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Status is CREATED', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql('CREATED');",
+							"});",
+							"",
+							"pm.test('Order number generated', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.orderNumber).to.match(/^ORD-\\d{4}-\\d{6}$/);",
+							"});"
+						]
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "2. Create Order (No Partial)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"customerId\": \"CUST-LK-002\",\n  \"partialAllowed\": false,\n  \"items\": [\n    {\n      \"itemId\": \"ITEM-004\",\n      \"quantity\": 50,\n      \"unitPrice\": 1500.00\n    },\n    {\n      \"itemId\": \"ITEM-005\",\n      \"quantity\": 25,\n      \"unitPrice\": 800.00\n    }\n  ]\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders"]
+				},
+				"description": "Creates an order with partialAllowed=false. If stock is insufficient during validation, it will be REJECTED."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Get Order by ID",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}"]
+				},
+				"description": "Retrieves a single order by UUID."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Order retrieved successfully', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has order fields', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('id');",
+							"    pm.expect(jsonData).to.have.property('orderNumber');",
+							"    pm.expect(jsonData).to.have.property('status');",
+							"    pm.expect(jsonData).to.have.property('items');",
+							"});"
+						]
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "4. List All Orders",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders"]
+				},
+				"description": "Returns all orders without any filter."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Orders list retrieved', function () {",
+							"    pm.response.to.have.status(200);",
+							"    pm.expect(pm.response.json()).to.be.an('array');",
+							"});"
+						]
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "5. List Orders by Status",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders?status=CREATED",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders"],
+					"query": [
+						{
+							"key": "status",
+							"value": "CREATED"
+						}
+					]
+				},
+				"description": "Returns orders filtered by status. Try: CREATED, VALIDATED, APPROVED, PARTIALLY_APPROVED, REJECTED, CANCELLED, PICKING_REQUESTED, PACKED, DISPATCHED, DELIVERED"
+			},
+			"response": []
+		},
+		{
+			"name": "6. Validate Order",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/validate",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "validate"]
+				},
+				"description": "Validates the order against Inventory Service.\n\n⚠️ Requires Inventory Service running at the configured base-url.\n\nResults:\n- If canFulfill=true → status becomes VALIDATED\n- If canFulfill=false and partialAllowed=false → status becomes REJECTED\n- If canFulfill=false and partialAllowed=true → status becomes VALIDATED"
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Validation response received', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has availability fields', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('canFulfill');",
+							"});"
+						]
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "7. Approve Order - FULL",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"approvalType\": \"FULL\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/approve",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "approve"]
+				},
+				"description": "Full approval — all items get approvedQty = requestedQty.\nRequires sufficient stock in Inventory Service.\nStatus becomes APPROVED."
+			},
+			"response": []
+		},
+		{
+			"name": "8. Approve Order - AUTO",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"approvalType\": \"AUTO\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/approve",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "approve"]
+				},
+				"description": "Auto approval — if stock is sufficient, fully approves. If not and partialAllowed=true, uses suggested quantities from Inventory Service.\nStatus becomes APPROVED or PARTIALLY_APPROVED."
+			},
+			"response": []
+		},
+		{
+			"name": "9. Approve Order - PARTIAL",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"approvalType\": \"PARTIAL\",\n  \"approvedItems\": [\n    {\n      \"itemId\": \"ITEM-001\",\n      \"approvedQty\": 5\n    },\n    {\n      \"itemId\": \"ITEM-002\",\n      \"approvedQty\": 3\n    },\n    {\n      \"itemId\": \"ITEM-003\",\n      \"approvedQty\": 10\n    }\n  ]\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/approve",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "approve"]
+				},
+				"description": "Partial approval — you specify the approved quantity for each item.\napprovedQty must be <= requestedQty.\nStatus becomes APPROVED or PARTIALLY_APPROVED."
+			},
+			"response": []
+		},
+		{
+			"name": "10. Cancel Order",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/cancel",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "cancel"]
+				},
+				"description": "Cancels the order. Not allowed if status is DISPATCHED or DELIVERED."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Order cancelled', function () {",
+							"    pm.response.to.have.status(200);",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql('CANCELLED');",
+							"});"
+						]
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "11. Update Status → PICKING_REQUESTED",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"PICKING_REQUESTED\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/status",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "status"]
+				},
+				"description": "Manual status update. Valid from APPROVED or PARTIALLY_APPROVED."
+			},
+			"response": []
+		},
+		{
+			"name": "12. Update Status → PACKED",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"PACKED\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/status",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "status"]
+				},
+				"description": "Manual status update. Valid from PICKING_REQUESTED."
+			},
+			"response": []
+		},
+		{
+			"name": "13. Update Status → DISPATCHED",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"DISPATCHED\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/status",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "status"]
+				},
+				"description": "Manual status update. Valid from PACKED."
+			},
+			"response": []
+		},
+		{
+			"name": "14. Update Status → DELIVERED",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"DELIVERED\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/status",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "status"]
+				},
+				"description": "Manual status update. Valid from DISPATCHED. Final status."
+			},
+			"response": []
+		},
+		{
+			"name": "15. Validation Error Test",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"customerId\": \"\",\n  \"partialAllowed\": null,\n  \"items\": []\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders"]
+				},
+				"description": "Tests validation error handling. Should return 400 with VALIDATION_ERROR and field-level messages."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Validation error returned', function () {",
+							"    pm.response.to.have.status(400);",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.errorCode).to.eql('VALIDATION_ERROR');",
+							"    pm.expect(jsonData.details).to.be.an('array').that.is.not.empty;",
+							"});"
+						]
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "16. Not Found Test",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/00000000-0000-0000-0000-000000000000",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "00000000-0000-0000-0000-000000000000"]
+				},
+				"description": "Tests 404 Not Found error handling with a non-existent UUID."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Not found error returned', function () {",
+							"    pm.response.to.have.status(404);",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.errorCode).to.eql('NOT_FOUND');",
+							"});"
+						]
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "17. Invalid Status Transition Test",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"DELIVERED\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/orders/{{orderId}}/status",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "orders", "{{orderId}}", "status"]
+				},
+				"description": "Tests invalid status transition (e.g., CREATED → DELIVERED). Should return 400 with BUSINESS_ERROR."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Business error returned', function () {",
+							"    pm.response.to.have.status(400);",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.errorCode).to.eql('BUSINESS_ERROR');",
+							"});"
+						]
+					}
+				}
+			],
+			"response": []
+		}
+	]
+}
