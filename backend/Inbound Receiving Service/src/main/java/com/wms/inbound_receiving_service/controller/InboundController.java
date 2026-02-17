@@ -1,6 +1,7 @@
 package com.wms.inbound_receiving_service.controller;
 
-import com.wms.inbound_receiving_service.dto.*;
+import com.wms.inbound_receiving_service.dto.InboundRequestDTO;
+import com.wms.inbound_receiving_service.dto.InboundResponseDTO;
 import com.wms.inbound_receiving_service.service.InboundService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
